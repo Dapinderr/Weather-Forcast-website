@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Beautiful weather forecast app with 7-day forecasts, dynamic backgrounds, and live weather data">
+  <title>Weather Forecast - Dynamic Weather App</title>
+  
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://api.openweathermap.org">
+  
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles_optimized.css">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.webmanifest">
+  
+  <!-- Theme Color for Mobile -->
+  <meta name="theme-color" content="#74b9ff">
+  
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛅</text></svg>">
+</head>
+<body>
+  <!-- Loading Skeleton -->
+  <div id="loadingSkeleton" class="loading-skeleton" aria-hidden="true">
+    <div class="skeleton-pulse"></div>
+  </div>
+
+  <!-- Main App Container -->
+  <main class="app" data-theme="light" role="main">
+    <!-- Dynamic Background Overlays -->
+    <div class="weather-overlay" aria-hidden="true"></div>
+    <div class="particles-overlay" aria-hidden="true"></div>
+    <div class="gradient-overlay" aria-hidden="true"></div>
+    
+    <!-- Top Progress Indicator -->
+    <div class="progress-bar" aria-hidden="true"></div>
+
+    <!-- Header Section -->
+    <header class="header" role="banner">
+      <div class="header-content">
+        <!-- Brand Section -->
+        <div class="brand-section">
+          <button class="logo" aria-label="Weather App Logo">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <defs>
+                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#74b9ff"/>
+                  <stop offset="100%" style="stop-color:#6c5ce7"/>
+                </linearGradient>
+              </defs>
+              <path fill="url(#logoGradient)" d="M46 29c0-6.6-5.4-12-12-12-5 0-9.3 3-11.1 7.3C21 24.1 19.6 24 18 24 11.4 24 6 29.4 6 36s5.4 12 12 12h27c6.1 0 11-4.9 11-11s-4.9-11-11-11z"/>
+            </svg>
+          </button>
+          <div class="brand-info">
+            <h1 class="brand-title">Weather Pro</h1>
+            <p class="brand-tagline">Live forecasts with style</p>
+          </div>
+        </div>
+
+        <!-- Current Time & Search -->
+        <div class="header-center">
+          <div class="current-time">
+            <time id="currentTime" class="time-display">12:00 PM</time>
+            <span class="time-label">Local Time</span>
+          </div>
+          
+          <!-- Search Section -->
+          <div class="search-container">
+            <form id="searchForm" class="search-form" autocomplete="off">
+              <div class="search-input-group">
+                <input 
+                  id="searchInput" 
+                  type="text" 
+                  placeholder="Search city..." 
+                  aria-label="Search for a city"
+                  aria-describedby="search-help"
+                  autocomplete="off"
+                >
+                <button type="submit" class="search-btn" aria-label="Search">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="M21 21l-4.35-4.35"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="suggestions" class="suggestions" role="listbox" aria-hidden="true"></div>
+            </form>
+            
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+              <button id="geoBtn" class="action-btn" title="Use current location" aria-label="Get my location">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="3,11 22,2 13,21 11,13 3,11"/>
+                </svg>
+              </button>
+              <button id="favoritesBtn" class="action-btn" title="Manage favorites" aria-label="Favorites">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
+                </svg>
+              </button>
+              <button id="themeToggle" class="action-btn theme-toggle" title="Toggle theme" aria-label="Toggle dark/light theme">
+                <svg class="theme-icon sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="5"/>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+                <svg class="theme-icon moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Section -->
+        <div class="user-section">
+          <div class="date-display">
+            <span id="currentDate" class="current-date">Dec 16, 2024</span>
+          </div>
+          <div class="user-controls">
+            <button id="shareBtn" class="control-btn" title="Share weather" aria-label="Share">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/>
+              </svg>
+            </button>
+            <button id="settingsBtn" class="control-btn" title="Settings" aria-label="Settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1m15.5-3.5L17 12l3.5 3.5M6.5 8.5L3 12l3.5 3.5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab active" role="tab" aria-selected="true" data-tab="today">
+        <span class="tab-icon">🏠</span>
+        <span class="tab-label">Today</span>
+      </button>
+      <button class="nav-tab" role="tab" aria-selected="false" data-tab="forecast">
+        <span class="tab-icon">📅</span>
+        <span class="tab-label">7-Day</span>
+      </button>
+      <button class="nav-tab" role="tab" aria-selected="false" data-tab="hourly">
+        <span class="tab-icon">⏰</span>
+        <span class="tab-label">Hourly</span>
+      </button>
+      <div class="current-location" id="currentLocation">
+        <span class="location-icon">📍</span>
+        <span id="locationName">Delhi, India</span>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <section class="main-content">
+      <!-- Today Tab Content -->
+      <div id="todayTab" class="tab-content active">
+        <div class="weather-grid">
+          <!-- Current Weather Card -->
+          <div class="weather-card current-weather" role="region" aria-labelledby="current-weather-title">
+            <div class="weather-header">
+              <h2 id="current-weather-title" class="sr-only">Current Weather</h2>
+              <div class="weather-main">
+                <div class="temperature-display">
+                  <span id="currentTemp" class="temperature">25°</span>
+                  <span class="temperature-unit">C</span>
+                </div>
+                <div class="weather-info">
+                  <h3 id="weatherCondition" class="condition">Partly Cloudy</h3>
+                  <p id="weatherDescription" class="description">Light winds from the west</p>
+                </div>
+              </div>
+              <div class="weather-icon-large" id="weatherIcon" aria-hidden="true">
+                <svg viewBox="0 0 64 64" width="64" height="64">
+                  <circle cx="32" cy="32" r="16" fill="#FDB813"/>
+                </svg>
+              </div>
+            </div>
+            
+            <!-- Weather Details -->
+            <div class="weather-details">
+              <div class="detail-item">
+                <span class="detail-label">Feels Like</span>
+                <span id="feelsLike" class="detail-value">28°</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Humidity</span>
+                <span id="humidity" class="detail-value">65%</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Wind</span>
+                <span id="windSpeed" class="detail-value">12 km/h</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">UV Index</span>
+                <span id="uvIndex" class="detail-value">Moderate</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Weather Stats -->
+          <div class="weather-stats">
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">Humidity</span>
+                <span id="humidityPercent" class="stat-value">65%</span>
+              </div>
+              <div class="humidity-bar" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">
+                <div class="humidity-fill" style="--humidity: 65%"></div>
+              </div>
+            </div>
+            
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-title">Air Quality</span>
+                <span id="airQuality" class="stat-value air-quality-good">Good</span>
+              </div>
+              <div class="air-quality-indicator">
+                <div class="aqi-dot"></div>
+                <span class="aqi-text">Clean air quality</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Cities -->
+          <div class="quick-cities">
+            <h3 class="section-title">Quick Cities</h3>
+            <div class="cities-grid" id="quickCities">
+              <div class="city-card" data-city="Mumbai, IN">
+                <span class="city-name">Mumbai</span>
+                <span class="city-temp">28°</span>
+                <span class="city-icon">🌤️</span>
+              </div>
+              <div class="city-card" data-city="Chennai, IN">
+                <span class="city-name">Chennai</span>
+                <span class="city-temp">30°</span>
+                <span class="city-icon">☀️</span>
+              </div>
+              <div class="city-card" data-city="Kolkata, IN">
+                <span class="city-name">Kolkata</span>
+                <span class="city-temp">26°</span>
+                <span class="city-icon">🌧️</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7-Day Forecast Tab -->
+      <div id="forecastTab" class="tab-content">
+        <div class="forecast-container">
+          <h2 class="section-title">7-Day Forecast</h2>
+          <div id="forecastList" class="forecast-list" role="list">
+            <!-- Forecast items will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Hourly Forecast Tab -->
+      <div id="hourlyTab" class="tab-content">
+        <div class="hourly-container">
+          <h2 class="section-title">24-Hour Forecast</h2>
+          <div class="hourly-scroll">
+            <div id="hourlyList" class="hourly-list">
+              <!-- Hourly items will be populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Weather Effects Canvas -->
+    <canvas id="weatherCanvas" class="weather-canvas" aria-hidden="true"></canvas>
+
+    <!-- Floating Action Button -->
+    <button id="fabRefresh" class="fab" title="Refresh weather data" aria-label="Refresh">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+      </svg>
+    </button>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal" role="dialog" aria-labelledby="settingsTitle" aria-hidden="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="settingsTitle" class="modal-title">Settings</h2>
+        <button id="closeSettings" class="close-btn" aria-label="Close settings">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <label for="unitSelect" class="setting-label">Temperature Unit</label>
+          <select id="unitSelect" class="setting-select">
+            <option value="metric">Celsius (°C)</option>
+            <option value="imperial">Fahrenheit (°F)</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label for="languageSelect" class="setting-label">Language</label>
+          <select id="languageSelect" class="setting-select">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+        <div class="settings-group">
+          <label class="setting-label">Auto Refresh</label>
+          <div class="toggle-group">
+            <input type="checkbox" id="autoRefresh" class="toggle-checkbox">
+            <label for="autoRefresh" class="toggle-label">
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Every 10 minutes</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Favorites Modal -->
+  <div id="favoritesModal" class="modal" role="dialog" aria-labelledby="favoritesTitle" aria-hidden="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="favoritesTitle" class="modal-title">Favorite Cities</h2>
+        <button id="closeFavorites" class="close-btn" aria-label="Close favorites">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="favoritesList" class="favorites-list">
+          <!-- Favorite cities will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Back to Top Button -->
+  <button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 19V5M5 12l7-7 7 7"/>
+    </svg>
+  </button>
+
+  <!-- Scripts -->
+  <script src="app_optimized.js"></script>
+</body>
+</html>
