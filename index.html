@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Forecast</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+</head>
+<body>
+  <div class="app" data-theme="light">
+    <!-- Glassy rain/drops overlay -->
+    <div class="drops" aria-hidden="true"></div>
+    <div class="stormveil" aria-hidden="true"></div>
+    <div class="top-progress" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img" aria-label="logo">
+            <defs>
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path filter="url(#glow)" fill="#ffffff" fill-opacity="0.95"
+              d="M46 29c0-6.6-5.4-12-12-12-5 0-9.3 3-11.1 7.3C21 24.1 19.6 24 18 24 11.4 24 6 29.4 6 36s5.4 12 12 12h27c6.1 0 11-4.9 11-11s-4.9-11-11-11z" />
+          </svg>
+        </div>
+        <div class="brand-meta">
+          <div class="brand-title">Weather Forecast</div>
+          <nav class="nav">
+            <a href="#" class="active">Home</a>
+            <a href="#">Application</a>
+          </nav>
+        </div>
+      </div>
+
+      <div class="now">
+        <div class="time">09:46 <span>AM</span></div>
+        <div class="label">Time</div>
+        <div class="search">
+          <form id="searchForm" autocomplete="off">
+            <input id="searchInput" type="text" placeholder="Search city..." aria-label="Search city" />
+            <button id="searchBtn" type="submit" class="icon small" aria-label="Search">🔍</button>
+          </form>
+          <div id="suggestions" class="suggestions" hidden></div>
+          <div class="quickbar">
+            <button id="geoBtn" class="icon small" title="Use my location" aria-label="Use my location">📍</button>
+            <button id="manageFavsBtn" class="icon small" title="Manage favorites" aria-label="Manage favorites">★</button>
+            <button id="forecastBtn" class="icon small" title="Show 7-day forecast" aria-label="7-day">7d</button>
+            <div id="favChips" class="fav-chips" aria-label="favorites"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="user-area">
+        <div class="calendar">
+          <div class="date">29 Dec <span class="year">2025</span></div>
+        </div>
+        <div class="user">
+          <div class="avatar" title="Cristina">C</div>
+          <div class="icons">
+            <button id="shareBtn" class="icon" title="Share" aria-label="share">↗</button>
+            <button id="bookmarkBtn" class="icon bookmark" title="Bookmark" aria-label="bookmark">★</button>
+            <button id="settingsBtn" class="icon" title="Settings" aria-label="settings">⚙</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sticky sub-navigation -->
+    <nav class="subnav" role="navigation" aria-label="Secondary">
+      <div class="subnav-left">
+        <button class="subnav-link active" data-target="#todaySection" data-icon="🏠"><span class="label">Today</span></button>
+        <button class="subnav-link" data-target="#forecastSection" data-icon="📅"><span class="label">7‑Day</span></button>
+        <button class="subnav-link" data-target="#hourlySection" data-icon="⏱️"><span class="label">Hourly</span></button>
+        <button class="subnav-link" data-action="open-favs" data-icon="⭐"><span class="label">Favorites</span></button>
+        <button class="subnav-link" data-action="open-settings" data-icon="⚙️"><span class="label">Settings</span></button>
+      </div>
+      <div class="nav-city" id="navCityLabel">Delhi, IN</div>
+    </nav>
+
+    <main class="layout">
+      <!-- Left column -->
+      <section id="todaySection" class="panel left">
+        <div class="headline">
+          <h1 id="headlineMain">Stormy</h1>
+          <h2 id="headlineSub">with Heavy Rain</h2>
+          <p class="desc" id="descText">
+            Variable clouds with snow showers. High 11°F. Winds E at 10 to 20 mph.
+            Chance of snow 60%. Snow accumulation less than one inch.
+          </p>
+        </div>
+
+        <div class="mini-temps">
+          <div class="mini" data-city="Delhi, IN">
+            <div class="mini-temp">12°</div>
+            <div class="mini-label">Delhi</div>
+          </div>
+          <div class="mini" data-city="Punjab, IN">
+            <div class="mini-temp">17°</div>
+            <div class="mini-label">Punjab</div>
+          </div>
+          <div class="mini" data-city="Jammu, IN">
+            <div class="mini-temp">14°</div>
+            <div class="mini-label">Jammu</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Center scene with cloud and rain -->
+      <section class="panel scene">
+        <div class="big-cloud" aria-hidden="true">
+          <div class="clouds" aria-hidden="true">
+            <div class="cloud l1"></div>
+            <div class="cloud l2"></div>
+            <div class="cloud l3"></div>
+          </div>
+          <div class="rain" aria-hidden="true"></div>
+          <div class="snow" aria-hidden="true"></div>
+          <div class="wind" aria-hidden="true"></div>
+          <div class="lightning" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <!-- Right column -->
+      <section class="panel right">
+        <div class="temp-main">
+          <div class="temp" id="mainTemp">27°</div>
+          <div class="qual">
+            <span class="chip" id="qualityChip">excellent</span>
+          </div>
+          <ul class="meta">
+            <li id="windLine">WIND: WSW 6 MPH</li>
+            <li id="uvLine">UV INDEX: 0 OF 10</li>
+            <li id="cityLine">NEW YORK CITY</li>
+          </ul>
+          <div id="dataSource" class="data-source" title="Where the data came from">
+            <span id="dataSourceText">Data source: OpenWeatherMap</span>
+            <button id="dsInfoBtn" class="icon tiny" aria-label="What is this?">i</button>
+            <div id="dsTooltip" class="tooltip" role="tooltip" hidden>
+              Weather data comes from OpenWeatherMap whenever available. If it’s temporarily unreachable, we fall back to Open‑Meteo (no key) so the UI still updates.
+            </div>
+          </div>
+        </div>
+
+        <div class="right-grid">
+          <div class="humidity">
+            <div class="label">Humidity</div>
+            <div class="h-gauge"><span id="humidityText">9.8%</span></div>
+          </div>
+
+          <ul class="city-list" id="cityList">
+            <li data-city="Delhi, IN" class="active"><span>Delhi (IN)</span><b>18°</b></li>
+            <li data-city="Punjab, IN"><span>Punjab (IN)</span><b>24°</b></li>
+            <li data-city="Jammu, IN"><span>Jammu (IN)</span><b>27°</b></li>
+            <li data-city="Mumbai, IN"><span>Mumbai (IN)</span><b>-2°</b></li>
+          </ul>
+
+          <div class="v-buttons" aria-label="quick actions">
+            <button id="cloudBtn" title="Clouds" class="circle">☁</button>
+            <button id="rainBtn" title="Rain" class="circle">☂</button>
+            <button id="windBtn" title="Wind" class="circle">🌀</button>
+            <button id="snowBtn" title="Snow" class="circle">❄</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Forecast strip (inline, scrollable) -->
+      <section id="forecastSection" class="panel forecast">
+        <div id="forecastStrip" class="forecast-strip" aria-label="7-day forecast"></div>
+      </section>
+      <!-- Hourly chart -->
+      <section id="hourlySection" class="panel hourly">
+        <canvas id="hourlyCanvas" width="1200" height="160" aria-label="Next 24h temperature"></canvas>
+      </section>
+    </main>
+
+    <!-- Now bar summary -->
+    <div id="nowBar" class="nowbar" role="status" aria-live="polite">
+      <div class="nowbar-left">
+        <span class="now-ico" id="nowBarIcon">☀️</span>
+        <span class="now-city" id="nowBarCity">Delhi, IN</span>
+        <span class="sep">•</span>
+        <span class="now-desc" id="nowBarDesc">Clear sky</span>
+      </div>
+      <div class="nowbar-right">
+        <span class="now-temp" id="nowBarTemp">27°</span>
+        <span class="now-feels" id="nowBarFeels">Feels 28°</span>
+      </div>
+    </div>
+
+    <footer class="waves" aria-hidden="true">
+      <svg viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <path fill="rgba(255,255,255,0.55)" d="M0,90 C150,30 300,120 420,60 C540,0 690,120 810,60 C930,0 1080,120 1200,60 C1320,0 1440,90 1440,90 L1440,120 L0,120 Z" />
+      </svg>
+      <div class="wave-labels">
+        <span>LOW 18°C</span>
+        <span>HIGH 12°C</span>
+        <span>LOW 9°C</span>
+        <span>HIGH 14°C</span>
+        <span>LOW 11°C</span>
+        <span>HIGH 16°C</span>
+      </div>
+    </footer>
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal" hidden>
+      <div class="settings-card">
+        <div class="settings-header">
+          <strong>Settings</strong>
+          <button id="closeSettings" class="icon small" title="Close" aria-label="Close">✕</button>
+        </div>
+        <div class="settings-row">
+          <label for="unitSelect">Units</label>
+          <select id="unitSelect">
+            <option value="metric">Celsius (°C)</option>
+            <option value="imperial">Fahrenheit (°F)</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="themeSelect">Theme</label>
+          <select id="themeSelect">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="providerSelect">Provider</label>
+          <select id="providerSelect">
+            <option value="auto">Auto (prefer OWM, fallback to Open‑Meteo)</option>
+            <option value="owm">OpenWeatherMap only</option>
+            <option value="om">Open‑Meteo only</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="owmKeyInput">OpenWeatherMap Key</label>
+          <div style="display:flex;gap:8px;align-items:center;flex:1">
+            <input id="owmKeyInput" type="password" placeholder="Paste key (stored locally)" style="flex:1" />
+            <button id="saveKeyBtn" class="icon small" title="Save key" aria-label="Save">✔</button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label for="autoRefreshToggle">Auto refresh</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="autoRefreshToggle" type="checkbox" />
+            <span>every</span>
+            <input id="autoRefreshMinutes" type="number" min="1" max="60" value="5" style="width:64px" />
+            <span>min</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <label for="debugToggle">Show Debug Panel</label>
+          <input id="debugToggle" type="checkbox" />
+        </div>
+      </div>
+    </div>
+    <!-- Toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- Back to top button -->
+    <button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+    <!-- Debug Panel -->
+    <div id="debugPanel" class="debug-panel" hidden>
+      <div class="debug-header">
+        <strong>Debug</strong>
+        <button id="debugClose" class="icon small" title="Close" aria-label="Close">✕</button>
+      </div>
+      <pre id="debugText">Waiting…</pre>
+    </div>
+
+    <!-- Favorites Manager -->
+    <div id="favsModal" class="settings-modal" hidden>
+      <div class="settings-card">
+        <div class="settings-header">
+          <strong>Favorites</strong>
+          <button id="closeFavs" class="icon small" aria-label="Close">✕</button>
+        </div>
+        <div id="favsList" class="favs-list"></div>
+      </div>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
