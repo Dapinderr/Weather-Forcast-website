@@ -349,6 +349,122 @@ body {
 /* Shimmer anim for gradient text */
 @keyframes shimmer { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
+/* Particle Canvas */
+#particleCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Entrance Animations */
+.panel {
+  animation: fadeInUp 0.8s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.headline h1 {
+  animation: textGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes textGlow {
+  from { filter: drop-shadow(0 0 5px rgba(255, 191, 94, 0.5)); }
+  to { filter: drop-shadow(0 0 15px rgba(255, 191, 94, 0.8)); }
+}
+
+/* Micro-interactions */
+.icon:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: inset 0 0 0 1px var(--line), 0 12px 28px rgba(0,0,0,.3);
+}
+
+.circle:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+
+.mini:hover .mini-temp {
+  animation: pulse 0.6s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Additional Theme Variants */
+.app[data-theme="neon"] {
+  --bg-top: #0a0a0a;
+  --bg-mid: #1a1a1a;
+  --bg-bottom: #2a2a2a;
+  --text: #ffffff;
+  --muted: rgba(255,255,255,.8);
+  --thin: rgba(255,255,255,.5);
+  --line: rgba(255,255,255,.3);
+  --chip: rgba(255,255,255,.15);
+  --accent-warm: #ff0080;
+  --accent-cool: #00ffff;
+  --neon-pink: #ff0080;
+  --neon-mint: #00ff80;
+  --neon-blue: #0080ff;
+}
+
+.app[data-theme="minimal"] {
+  --bg-top: #f5f5f5;
+  --bg-mid: #e0e0e0;
+  --bg-bottom: #cccccc;
+  --text: #333333;
+  --muted: rgba(51,51,51,.7);
+  --thin: rgba(51,51,51,.4);
+  --line: rgba(51,51,51,.2);
+  --chip: rgba(51,51,51,.1);
+  --accent-warm: #666666;
+  --accent-cool: #999999;
+  --neon-pink: #cccccc;
+  --neon-mint: #aaaaaa;
+  --neon-blue: #888888;
+}
+
+/* Weather Alerts */
+.weather-alert {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #ff4444, #ff8844);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(255,68,68,.4);
+  z-index: 100;
+  animation: alertSlideIn 0.5s ease-out;
+  max-width: 90vw;
+}
+
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Responsive scaling for smaller windows */
 /* Full-bleed layout now, no scaling needed on smaller screens */
 @media (max-width: 1280px) {

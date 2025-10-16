@@ -88,6 +88,7 @@ themeSelect: document.getElementById('themeSelect'),
     forecastStrip: document.getElementById('forecastStrip'),
     forecastBtn: document.getElementById('forecastBtn'),
     forecastSection: document.getElementById('forecastSection'),
+    particleCanvas: document.getElementById('particleCanvas'),
   };
 
   // Utility
@@ -179,6 +180,16 @@ const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponen
         coord: { lat, lon },
       };
     } catch { return null; }
+  }
+
+  async function fetchAlerts(lat, lon) {
+    try {
+      const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=current,minutely,hourly,daily&appid=${apiKey()}`;
+      const res = await fetchWithTimeout(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.alerts || [];
+    } catch { return []; }
   }
 
   async function fetchByCoords(lat, lon) {
@@ -406,6 +417,25 @@ const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponen
         }
       } else {
         appRoot.style.removeProperty('--flash');
+      }
+
+      // Fetch and display alerts
+      if (data.coord) {
+        const alerts = await fetchAlerts(data.coord.lat, data.coord.lon);
+        displayAlerts(alerts);
+      }
+
+      // Particle effects integration
+      const isRaining = w.includes('rain') || w.includes('drizzle');
+      const isSnowing = w.includes('snow');
+      if (isRaining) {
+        startParticles('rain');
+        updateParticleWind(data.wind.speed);
+      } else if (isSnowing) {
+        startParticles('snow');
+        updateParticleWind(data.wind.speed);
+      } else {
+        stopParticles();
       }
     } catch (err) {
       console.error(err);
@@ -766,6 +796,123 @@ const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponen
     appRoot.addEventListener('mousemove', move);
   }
 
+  // Canvas particle system for rain/snow
+  let particles = [];
+  let animationId = null;
+  let canvas, ctx;
+
+  function initCanvas() {
+    if (!els.particleCanvas) return;
+    canvas = els.particleCanvas;
+    ctx = canvas.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+  }
+
+  function resizeCanvas() {
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  class Particle {
+    constructor(type) {
+      this.type = type; // 'rain' or 'snow'
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.speed = type === 'rain' ? 15 + Math.random() * 10 : 2 + Math.random() * 3;
+      this.size = type === 'rain' ? 2 + Math.random() * 2 : 3 + Math.random() * 3;
+      this.opacity = 0.6 + Math.random() * 0.4;
+      this.wind = 0;
+    }
+
+    update() {
+      this.y += this.speed;
+      this.x += this.wind;
+      if (this.y > canvas.height) {
+        this.y = -this.size;
+        this.x = Math.random() * canvas.width;
+      }
+      if (this.x > canvas.width) this.x = 0;
+      if (this.x < 0) this.x = canvas.width;
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.opacity;
+      if (this.type === 'rain') {
+        ctx.strokeStyle = '#7ad1ff';
+        ctx.lineWidth = this.size;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x + this.wind * 2, this.y + this.size * 5);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function createParticles(type, count) {
+    for (let i = 0; i < count; i++) {
+      particles.push(new Particle(type));
+    }
+  }
+
+  function updateParticles() {
+    particles.forEach(p => p.update());
+  }
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => p.draw());
+  }
+
+  function animate() {
+    updateParticles();
+    drawParticles();
+    animationId = requestAnimationFrame(animate);
+  }
+
+  function startParticles(type) {
+    if (!canvas) return;
+    particles = [];
+    const count = type === 'rain' ? 200 : 100;
+    createParticles(type, count);
+    if (!animationId) animate();
+  }
+
+  function stopParticles() {
+    particles = [];
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function updateParticleWind(windSpeed) {
+    const wind = windSpeed * 0.1;
+    particles.forEach(p => p.wind = wind);
+  }
+
+  function displayAlerts(alerts) {
+    const alertDisplay = document.getElementById('alertDisplay');
+    const alertText = document.getElementById('alertText');
+    if (!alertDisplay || !alertText) return;
+    if (alerts && alerts.length > 0) {
+      const alert = alerts[0]; // Display the first alert
+      alertText.textContent = alert.description || alert.event || 'Weather alert';
+      alertDisplay.hidden = false;
+    } else {
+      alertDisplay.hidden = true;
+    }
+  }
+
   function icoSvg(kind){
     const svg = {
       sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><g opacity=".85"><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="#fff" stroke-width="2" fill="none"/></g></svg>',
@@ -840,6 +987,7 @@ const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponen
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTheme('system'));
     }
 
+    initCanvas();
     wireCityClicks();
     wireTopButtons();
     wireSlider();
