@@ -29,7 +29,11 @@ class WeatherApp {
       autoRefresh: localStorage.getItem('autoRefresh') === 'true',
       isOnline: navigator.onLine,
       lastUpdate: null,
-      retryCount: 0
+      retryCount: 0,
+      simulationMode: localStorage.getItem('simulationMode') === 'true',
+      geolocationSimulationMode: localStorage.getItem('geolocationSimulationMode') === 'true',
+      simulatedLatitude: parseFloat(localStorage.getItem('simulatedLatitude')) || 28.6139, // Default: Delhi
+      simulatedLongitude: parseFloat(localStorage.getItem('simulatedLongitude')) || 77.2090
     };
 
     // Cache Management
@@ -239,6 +243,17 @@ class WeatherApp {
       }
     });
 
+    // Simulation mode toggle
+    const simulationToggle = document.getElementById('simulationMode');
+    if (simulationToggle) {
+      simulationToggle.addEventListener('change', (e) => {
+        this.state.simulationMode = e.target.checked;
+        localStorage.setItem('simulationMode', this.state.simulationMode);
+        this.loadWeatherData(this.state.currentCity);
+        this.showToast(this.state.simulationMode ? 'Simulation mode enabled' : 'Real data mode enabled');
+      });
+    }
+
     // Refresh button
     this.elements.fabRefresh?.addEventListener('click', () => {
       this.loadWeatherData(this.state.currentCity);
@@ -384,8 +399,13 @@ class WeatherApp {
    * Fetch forecast data
    */
   async fetchForecast(city) {
+    // Use simulated data if simulation mode is enabled
+    if (this.state.simulationMode) {
+      return this.generateSimulatedForecast();
+    }
+
     const url = `${this.config.BASE_URL}/forecast?q=${encodeURIComponent(city)}&units=${this.state.units}&appid=${this.config.API_KEY}`;
-    
+
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -788,6 +808,26 @@ class WeatherApp {
    * Get current location
    */
   getCurrentLocation() {
+    if (this.state.geolocationSimulationMode) {
+      // Use simulated coordinates
+      this.showLoading();
+      setTimeout(async () => {
+        try {
+          const cityName = await this.getCityFromCoordinates(
+            this.state.simulatedLatitude,
+            this.state.simulatedLongitude
+          );
+          await this.loadWeatherData(cityName);
+          this.showToast(`Location updated to simulated coordinates (${this.state.simulatedLatitude.toFixed(4)}, ${this.state.simulatedLongitude.toFixed(4)})!`);
+        } catch (error) {
+          this.showToast('Failed to get location weather.', 'error');
+        } finally {
+          this.hideLoading();
+        }
+      }, 500); // Simulate network delay
+      return;
+    }
+
     if (!navigator.geolocation) {
       this.showToast('Geolocation is not supported by this browser.', 'error');
       return;
@@ -884,6 +924,10 @@ class WeatherApp {
   populateSettings() {
     this.elements.unitSelect.value = this.state.units;
     this.elements.autoRefresh.checked = this.state.autoRefresh;
+    const simulationToggle = document.getElementById('simulationMode');
+    if (simulationToggle) {
+      simulationToggle.checked = this.state.simulationMode;
+    }
   }
 
   /**
@@ -1902,7 +1946,7 @@ class WeatherApp {
     for (let i = 0; i < 40; i++) {
       const date = new Date();
       date.setHours(date.getHours() + (i * 3));
-      
+
       mockList.push({
         dt: Math.floor(date.getTime() / 1000),
         main: {
@@ -1915,7 +1959,67 @@ class WeatherApp {
         }]
       });
     }
-    
+
+    return { list: mockList };
+  }
+
+  /**
+   * Generate simulated 3-day forecast data
+   */
+  generateSimulatedForecast() {
+    const mockList = [];
+    const baseTemp = 25;
+    const conditions = [
+      { main: 'Clear', description: 'clear sky', icon: '01d' },
+      { main: 'Clouds', description: 'few clouds', icon: '02d' },
+      { main: 'Rain', description: 'light rain', icon: '10d' },
+      { main: 'Thunderstorm', description: 'thunderstorm', icon: '11d' }
+    ];
+
+    // Generate 72 hours (3 days) of data, 3-hour intervals
+    for (let i = 0; i < 72; i++) {
+      const date = new Date();
+      date.setHours(date.getHours() + (i * 3));
+
+      // Vary temperature based on time of day and day
+      const hour = date.getHours();
+      const dayIndex = Math.floor(i / 24);
+      let tempVariation = 0;
+
+      // Day/night temperature variation
+      if (hour >= 6 && hour <= 18) {
+        tempVariation = 5; // Daytime warmer
+      } else {
+        tempVariation = -3; // Nighttime cooler
+      }
+
+      // Add some randomness and day-to-day variation
+      const randomTemp = (Math.random() - 0.5) * 8;
+      const dayVariation = dayIndex * 2; // Each day slightly different
+      const temp = baseTemp + tempVariation + randomTemp + dayVariation;
+
+      // Select weather condition based on probability
+      let condition;
+      const rand = Math.random();
+      if (rand < 0.4) condition = conditions[0]; // 40% clear
+      else if (rand < 0.7) condition = conditions[1]; // 30% clouds
+      else if (rand < 0.9) condition = conditions[2]; // 20% rain
+      else condition = conditions[3]; // 10% thunderstorm
+
+      mockList.push({
+        dt: Math.floor(date.getTime() / 1000),
+        main: {
+          temp: Math.round(temp * 10) / 10,
+          humidity: 50 + Math.floor(Math.random() * 40),
+          pressure: 1010 + Math.floor(Math.random() * 20)
+        },
+        weather: [condition],
+        wind: {
+          speed: Math.round((3 + Math.random() * 7) * 10) / 10
+        }
+      });
+    }
+
     return { list: mockList };
   }
 
