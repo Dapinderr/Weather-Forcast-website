@@ -29,6 +29,8 @@
   <!-- Loading Skeleton -->
   <div id="loadingSkeleton" class="loading-skeleton" aria-hidden="true">
     <div class="skeleton-pulse"></div>
+    <div class="skeleton-text"></div>
+    <div class="skeleton-subtext"></div>
   </div>
 
   <!-- Main App Container -->
@@ -226,6 +228,15 @@
               <div class="air-quality-indicator">
                 <div class="aqi-dot"></div>
                 <span class="aqi-text">Clean air quality</span>
+              </div>
+            </div>
+
+            <!-- Temperature Trend Chart -->
+            <div class="temperature-trend">
+              <div class="trend-title">24-Hour Temperature Trend</div>
+              <div class="trend-chart" id="trendChart">
+                <div class="trend-line"></div>
+                <!-- Trend points will be added by JavaScript -->
               </div>
             </div>
           </div>

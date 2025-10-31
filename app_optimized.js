@@ -1,19 +1,4 @@
-/**
- * Weather Pro - Optimized JavaScript Application
- * Modern, clean, and feature-rich weather application
- * 
- * Features:
- * - Dynamic weather backgrounds
- * - 7-day forecast with OpenWeatherMap API
- * - Dark/Light theme toggle
- * - Geolocation support
- * - Real-time weather updates
- * - Smooth animations and transitions
- * - Enhanced accessibility
- * - Error handling and toast notifications
- * - Loading skeletons
- * - Weather particle effects
- */
+
 
 class WeatherApp {
   constructor() {
@@ -24,7 +9,11 @@ class WeatherApp {
       GEO_URL: 'https://api.openweathermap.org/geo/1.0',
       DEFAULT_CITY: 'Delhi,IN',
       UPDATE_INTERVAL: 600000, // 10 minutes
-      DEBOUNCE_DELAY: 300
+      DEBOUNCE_DELAY: 300,
+      MAX_RETRIES: 3,
+      RETRY_DELAY: 1000,
+      CACHE_DURATION: 300000, // 5 minutes
+      OFFLINE_TIMEOUT: 10000
     };
 
     // State Management
@@ -37,7 +26,32 @@ class WeatherApp {
       favorites: JSON.parse(localStorage.getItem('favorites') || '[]'),
       activeTab: 'today',
       isLoading: false,
-      autoRefresh: localStorage.getItem('autoRefresh') === 'true'
+      autoRefresh: localStorage.getItem('autoRefresh') === 'true',
+      isOnline: navigator.onLine,
+      lastUpdate: null,
+      retryCount: 0
+    };
+
+    // Cache Management
+    this.cache = {
+      weather: new Map(),
+      forecast: new Map(),
+      suggestions: new Map()
+    };
+
+    // Error Tracking
+    this.errors = {
+      apiErrors: [],
+      networkErrors: [],
+      lastError: null
+    };
+
+    // Performance Monitoring
+    this.performance = {
+      loadTimes: [],
+      apiCalls: 0,
+      cacheHits: 0,
+      errors: 0
     };
 
     // DOM Elements Cache
@@ -95,7 +109,8 @@ class WeatherApp {
       toast: document.getElementById('toast'),
       fabRefresh: document.getElementById('fabRefresh'),
       backToTop: document.getElementById('backToTop'),
-      weatherCanvas: document.getElementById('weatherCanvas')
+      weatherCanvas: document.getElementById('weatherCanvas'),
+      trendChart: document.getElementById('trendChart')
     };
 
     // Weather icons mapping
@@ -127,6 +142,9 @@ class WeatherApp {
       // Initialize weather canvas
       this.initWeatherCanvas();
       
+      // Initialize dynamic background
+      this.initDynamicBackground();
+      
       // Start time updates
       this.startTimeUpdates();
       
@@ -137,6 +155,12 @@ class WeatherApp {
       if (this.state.autoRefresh) {
         this.setupAutoRefresh();
       }
+      
+      // Setup network monitoring
+      this.setupNetworkMonitoring();
+      
+      // Setup smart notifications
+      this.setupSmartNotifications();
       
       this.hideLoading();
       this.showToast('Weather Pro loaded successfully!');
@@ -287,6 +311,7 @@ class WeatherApp {
       this.updateHourlyForecast();
       this.updateWeatherBackground();
       this.updateWeatherEffects();
+      this.updateTemperatureTrend();
 
       this.hideLoading();
     } catch (error) {
@@ -297,20 +322,60 @@ class WeatherApp {
   }
 
   /**
-   * Fetch current weather data
+   * Fetch current weather data with intelligent error handling
    */
   async fetchCurrentWeather(city) {
+    const cacheKey = `${city}_${this.state.units}`;
+    
+    // Check cache first
+    if (this.isCacheValid(cacheKey, 'weather')) {
+      this.performance.cacheHits++;
+      this.logPerformance('Cache hit for weather data');
+      return this.cache.weather.get(cacheKey).data;
+    }
+
     const url = `${this.config.BASE_URL}/weather?q=${encodeURIComponent(city)}&units=${this.state.units}&appid=${this.config.API_KEY}`;
     
     try {
-      const response = await fetch(url);
+      this.performance.apiCalls++;
+      const startTime = performance.now();
+      
+      const response = await this.fetchWithRetry(url);
+      
       if (!response.ok) {
-        throw new Error(`Weather API error: ${response.status}`);
+        throw new Error(`Weather API error: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+      
+      const data = await response.json();
+      
+      // Validate data before caching
+      this.validateWeatherData(data);
+      
+      // Cache the result
+      this.cache.weather.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+      });
+      
+      // Log performance
+      const loadTime = performance.now() - startTime;
+      this.logPerformance(`Weather API call completed in ${loadTime.toFixed(2)}ms`);
+      
+      // Reset retry count on success
+      this.state.retryCount = 0;
+      
+      return data;
     } catch (error) {
-      // Fallback to mock data for demo
-      console.warn('Using mock weather data due to API error:', error);
+      this.handleError('Weather API', error);
+      
+      // Try to return cached data if available
+      if (this.cache.weather.has(cacheKey)) {
+        this.logPerformance('Using stale cached weather data');
+        return this.cache.weather.get(cacheKey).data;
+      }
+      
+      // Fallback to mock data
+      this.logPerformance('Using mock weather data');
       return this.getMockWeatherData(city);
     }
   }
@@ -334,42 +399,142 @@ class WeatherApp {
   }
 
   /**
-   * Update current weather display
+   * Update current weather display with smooth animations
    */
   updateCurrentWeather() {
     const weather = this.state.currentWeather;
     if (!weather) return;
 
-    // Temperature
-    const temp = Math.round(weather.main.temp);
-    this.elements.currentTemp.textContent = temp;
+    // Animate temperature change
+    this.animateTemperature(Math.round(weather.main.temp));
     
-    // Weather info
-    this.elements.weatherCondition.textContent = weather.weather[0].main;
-    this.elements.weatherDescription.textContent = weather.weather[0].description;
-    this.elements.locationName.textContent = weather.name;
+    // Weather info with fade transition
+    this.fadeTransition(this.elements.weatherCondition, weather.weather[0].main);
+    this.fadeTransition(this.elements.weatherDescription, weather.weather[0].description);
+    this.fadeTransition(this.elements.locationName, weather.name);
     
-    // Weather icon
+    // Weather icon with animation
     const iconCode = weather.weather[0].icon;
     const weatherIcon = this.weatherIcons[iconCode] || '🌤️';
-    this.elements.weatherIcon.innerHTML = `<span style="font-size: 4rem;">${weatherIcon}</span>`;
+    this.updateWeatherIcon(weatherIcon, iconCode);
     
-    // Details
-    this.elements.feelsLike.textContent = `${Math.round(weather.main.feels_like)}°`;
-    this.elements.humidity.textContent = `${weather.main.humidity}%`;
-    this.elements.windSpeed.textContent = `${Math.round(weather.wind.speed * 3.6)} km/h`;
+    // Animate numeric values
+    this.animateCounter(this.elements.feelsLike, Math.round(weather.main.feels_like), '°');
+    this.animateCounter(this.elements.humidity, weather.main.humidity, '%');
+    this.animateCounter(this.elements.windSpeed, Math.round(weather.wind.speed * 3.6), ' km/h');
     this.elements.uvIndex.textContent = 'Moderate'; // Mock UV data
     
-    // Humidity bar
-    this.elements.humidityPercent.textContent = `${weather.main.humidity}%`;
-    this.elements.humidityFill.style.setProperty('--humidity', `${weather.main.humidity}%`);
+    // Animate humidity bar
+    this.animateHumidityBar(weather.main.humidity);
     
     // Air quality (mock data)
     this.updateAirQuality(weather.main.humidity);
   }
 
   /**
-   * Update 7-day forecast
+   * Animate temperature counter
+   */
+  animateTemperature(targetTemp) {
+    const currentTemp = parseInt(this.elements.currentTemp.textContent) || 0;
+    const duration = 1000;
+    const steps = 30;
+    const stepDuration = duration / steps;
+    const stepValue = (targetTemp - currentTemp) / steps;
+    
+    this.elements.currentTemp.classList.add('updating');
+    
+    let currentStep = 0;
+    const timer = setInterval(() => {
+      currentStep++;
+      const newTemp = Math.round(currentTemp + (stepValue * currentStep));
+      this.elements.currentTemp.textContent = newTemp;
+      
+      if (currentStep >= steps) {
+        this.elements.currentTemp.textContent = targetTemp;
+        this.elements.currentTemp.classList.remove('updating');
+        clearInterval(timer);
+      }
+    }, stepDuration);
+  }
+
+  /**
+   * Animate counter values
+   */
+  animateCounter(element, targetValue, suffix = '') {
+    const currentValue = parseInt(element.textContent.replace(/[^\d]/g, '')) || 0;
+    const duration = 800;
+    const steps = 20;
+    const stepDuration = duration / steps;
+    const stepValue = (targetValue - currentValue) / steps;
+    
+    let currentStep = 0;
+    const timer = setInterval(() => {
+      currentStep++;
+      const newValue = Math.round(currentValue + (stepValue * currentStep));
+      element.textContent = newValue + suffix;
+      
+      if (currentStep >= steps) {
+        element.textContent = targetValue + suffix;
+        clearInterval(timer);
+      }
+    }, stepDuration);
+  }
+
+  /**
+   * Fade transition for text content
+   */
+  fadeTransition(element, newContent) {
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(10px)';
+    
+    setTimeout(() => {
+      element.textContent = newContent;
+      element.style.opacity = '1';
+      element.style.transform = 'translateY(0)';
+    }, 200);
+  }
+
+  /**
+   * Update weather icon with animation
+   */
+  updateWeatherIcon(icon, iconCode) {
+    const iconElement = this.elements.weatherIcon;
+    iconElement.style.transform = 'scale(0.8) rotate(180deg)';
+    iconElement.style.opacity = '0.5';
+    
+    setTimeout(() => {
+      iconElement.innerHTML = `<span style="font-size: 4rem;">${icon}</span>`;
+      
+      // Add weather-specific class for CSS animations
+      iconElement.className = 'weather-icon-large';
+      if (iconCode.includes('01')) iconElement.classList.add('sunny');
+      else if (iconCode.includes('02') || iconCode.includes('03') || iconCode.includes('04')) iconElement.classList.add('cloudy');
+      else if (iconCode.includes('09') || iconCode.includes('10')) iconElement.classList.add('rainy');
+      else if (iconCode.includes('11')) iconElement.classList.add('stormy');
+      else if (iconCode.includes('13')) iconElement.classList.add('snowy');
+      
+      iconElement.style.transform = 'scale(1) rotate(0deg)';
+      iconElement.style.opacity = '1';
+    }, 300);
+  }
+
+  /**
+   * Animate humidity bar
+   */
+  animateHumidityBar(humidity) {
+    const humidityFill = this.elements.humidityFill;
+    const humidityPercent = this.elements.humidityPercent;
+    
+    // Animate the percentage text
+    this.animateCounter(humidityPercent, humidity, '%');
+    
+    // Animate the bar width
+    humidityFill.style.transition = 'width 1s cubic-bezier(0.4, 0, 0.2, 1)';
+    humidityFill.style.setProperty('--humidity', `${humidity}%`);
+  }
+
+  /**
+   * Update 7-day forecast with animations
    */
   updateForecast() {
     const forecast = this.state.forecast;
@@ -378,51 +543,97 @@ class WeatherApp {
     // Group forecast by day
     const dailyForecasts = this.groupForecastByDay(forecast.list);
     
-    let forecastHTML = '';
-    dailyForecasts.slice(0, 7).forEach(day => {
-      const date = new Date(day.date);
-      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-      const weatherIcon = this.weatherIcons[day.weather.icon] || '🌤️';
-      
-      forecastHTML += `
-        <div class="forecast-item">
-          <div class="forecast-day">${dayName}</div>
-          <div class="forecast-icon">${weatherIcon}</div>
-          <div class="forecast-desc">${day.weather.description}</div>
-          <div class="forecast-high">${Math.round(day.maxTemp)}°</div>
-          <div class="forecast-low">${Math.round(day.minTemp)}°</div>
-        </div>
-      `;
-    });
+    // Clear existing forecast with fade out
+    this.elements.forecastList.style.opacity = '0';
+    this.elements.forecastList.style.transform = 'translateY(20px)';
     
-    this.elements.forecastList.innerHTML = forecastHTML;
+    setTimeout(() => {
+      let forecastHTML = '';
+      dailyForecasts.slice(0, 7).forEach((day, index) => {
+        const date = new Date(day.date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+        const weatherIcon = this.weatherIcons[day.weather.icon] || '🌤️';
+        
+        forecastHTML += `
+          <div class="forecast-item" style="animation-delay: ${index * 0.1}s;">
+            <div class="forecast-day">${dayName}</div>
+            <div class="forecast-icon">${weatherIcon}</div>
+            <div class="forecast-desc">${day.weather.description}</div>
+            <div class="forecast-high">${Math.round(day.maxTemp)}°</div>
+            <div class="forecast-low">${Math.round(day.minTemp)}°</div>
+          </div>
+        `;
+      });
+      
+      this.elements.forecastList.innerHTML = forecastHTML;
+      
+      // Fade in the new forecast
+      this.elements.forecastList.style.opacity = '1';
+      this.elements.forecastList.style.transform = 'translateY(0)';
+    }, 300);
   }
 
   /**
-   * Update hourly forecast
+   * Update hourly forecast with animations
    */
   updateHourlyForecast() {
     const forecast = this.state.forecast;
     if (!forecast || !forecast.list) return;
 
-    let hourlyHTML = '';
-    forecast.list.slice(0, 24).forEach(item => {
-      const date = new Date(item.dt * 1000);
-      const hour = date.getHours();
-      const time = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
-      const weatherIcon = this.weatherIcons[item.weather[0].icon] || '🌤️';
-      const temp = Math.round(item.main.temp);
-      
-      hourlyHTML += `
-        <div class="hourly-item">
-          <div class="hourly-time">${time}</div>
-          <div class="hourly-icon">${weatherIcon}</div>
-          <div class="hourly-temp">${temp}°</div>
-        </div>
-      `;
-    });
+    // Clear existing hourly forecast with fade out
+    this.elements.hourlyList.style.opacity = '0';
+    this.elements.hourlyList.style.transform = 'translateX(20px)';
     
-    this.elements.hourlyList.innerHTML = hourlyHTML;
+    setTimeout(() => {
+      let hourlyHTML = '';
+      forecast.list.slice(0, 24).forEach((item, index) => {
+        const date = new Date(item.dt * 1000);
+        const hour = date.getHours();
+        const time = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
+        const weatherIcon = this.weatherIcons[item.weather[0].icon] || '🌤️';
+        const temp = Math.round(item.main.temp);
+        
+        hourlyHTML += `
+          <div class="hourly-item" style="animation-delay: ${index * 0.05}s;">
+            <div class="hourly-time">${time}</div>
+            <div class="hourly-icon">${weatherIcon}</div>
+            <div class="hourly-temp">${temp}°</div>
+          </div>
+        `;
+      });
+      
+      this.elements.hourlyList.innerHTML = hourlyHTML;
+      
+      // Fade in the new hourly forecast
+      this.elements.hourlyList.style.opacity = '1';
+      this.elements.hourlyList.style.transform = 'translateX(0)';
+      
+      // Smooth scroll to current hour
+      this.scrollToCurrentHour();
+    }, 200);
+  }
+
+  /**
+   * Scroll to current hour in hourly forecast
+   */
+  scrollToCurrentHour() {
+    const currentHour = new Date().getHours();
+    const hourlyItems = this.elements.hourlyList.querySelectorAll('.hourly-item');
+    
+    if (hourlyItems.length > 0) {
+      const targetIndex = Math.min(currentHour, hourlyItems.length - 1);
+      const targetItem = hourlyItems[targetIndex];
+      
+      if (targetItem) {
+        setTimeout(() => {
+          targetItem.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'center'
+          });
+        }, 500);
+      }
+    }
   }
 
   /**
@@ -759,6 +970,84 @@ class WeatherApp {
     window.addEventListener('resize', () => this.resizeCanvas());
   }
 
+  /**
+   * Initialize dynamic background system
+   */
+  initDynamicBackground() {
+    // Add time-based background variations
+    this.updateBackgroundByTime();
+    
+    // Add mouse movement parallax effect
+    this.setupParallaxEffect();
+    
+    // Add scroll-based background changes
+    this.setupScrollEffect();
+  }
+
+  /**
+   * Update background based on time of day
+   */
+  updateBackgroundByTime() {
+    const hour = new Date().getHours();
+    const app = this.elements.app;
+    
+    // Remove existing time classes
+    app.classList.remove('morning', 'afternoon', 'evening', 'night');
+    
+    if (hour >= 5 && hour < 12) {
+      app.classList.add('morning');
+    } else if (hour >= 12 && hour < 17) {
+      app.classList.add('afternoon');
+    } else if (hour >= 17 && hour < 21) {
+      app.classList.add('evening');
+    } else {
+      app.classList.add('night');
+    }
+    
+    // Update every hour
+    setTimeout(() => this.updateBackgroundByTime(), (60 - new Date().getMinutes()) * 60 * 1000);
+  }
+
+  /**
+   * Setup parallax effect on mouse movement
+   */
+  setupParallaxEffect() {
+    let mouseX = 0, mouseY = 0;
+    
+    document.addEventListener('mousemove', (e) => {
+      mouseX = (e.clientX / window.innerWidth) * 100;
+      mouseY = (e.clientY / window.innerHeight) * 100;
+      
+      // Update CSS custom properties for parallax
+      document.documentElement.style.setProperty('--mouse-x', `${mouseX}%`);
+      document.documentElement.style.setProperty('--mouse-y', `${mouseY}%`);
+    });
+  }
+
+  /**
+   * Setup scroll-based background effects
+   */
+  setupScrollEffect() {
+    let ticking = false;
+    
+    const updateBackgroundOnScroll = () => {
+      const scrollY = window.pageYOffset;
+      const scrollPercent = Math.min(scrollY / (document.body.scrollHeight - window.innerHeight), 1);
+      
+      // Update background opacity and position based on scroll
+      document.documentElement.style.setProperty('--scroll-percent', scrollPercent);
+      
+      ticking = false;
+    };
+    
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(updateBackgroundOnScroll);
+        ticking = true;
+      }
+    });
+  }
+
   resizeCanvas() {
     if (!this.canvas) return;
     this.canvas.width = window.innerWidth;
@@ -771,11 +1060,172 @@ class WeatherApp {
     const condition = this.state.currentWeather.weather[0].main.toLowerCase();
     this.clearWeatherEffects();
     
+    // Enhanced weather effects based on conditions
     if (condition.includes('rain') || condition.includes('drizzle')) {
       this.startRainEffect();
     } else if (condition.includes('snow')) {
       this.startSnowEffect();
+    } else if (condition.includes('cloud')) {
+      this.startCloudEffect();
+    } else if (condition.includes('clear') || condition.includes('sun')) {
+      this.startSunEffect();
+    } else if (condition.includes('thunder') || condition.includes('storm')) {
+      this.startStormEffect();
     }
+  }
+
+  /**
+   * Start cloud particle effect
+   */
+  startCloudEffect() {
+    this.particles = [];
+    for (let i = 0; i < 30; i++) {
+      this.particles.push({
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * this.canvas.height * 0.6,
+        speed: 0.5 + Math.random() * 1,
+        size: 20 + Math.random() * 40,
+        opacity: 0.1 + Math.random() * 0.2,
+        drift: Math.random() * 0.5
+      });
+    }
+    this.animateClouds();
+  }
+
+  /**
+   * Start sun particle effect
+   */
+  startSunEffect() {
+    this.particles = [];
+    for (let i = 0; i < 20; i++) {
+      this.particles.push({
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * this.canvas.height * 0.4,
+        speed: 0.2 + Math.random() * 0.3,
+        size: 2 + Math.random() * 4,
+        opacity: 0.3 + Math.random() * 0.4,
+        angle: Math.random() * Math.PI * 2
+      });
+    }
+    this.animateSun();
+  }
+
+  /**
+   * Start storm particle effect
+   */
+  startStormEffect() {
+    this.particles = [];
+    for (let i = 0; i < 80; i++) {
+      this.particles.push({
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * this.canvas.height,
+        speed: 8 + Math.random() * 8,
+        size: 1 + Math.random() * 3,
+        opacity: 0.4 + Math.random() * 0.6,
+        flash: Math.random() > 0.95
+      });
+    }
+    this.animateStorm();
+  }
+
+  /**
+   * Animate cloud particles
+   */
+  animateClouds() {
+    if (!this.ctx || this.particles.length === 0) return;
+    
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    this.particles.forEach(particle => {
+      this.ctx.save();
+      this.ctx.globalAlpha = particle.opacity;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.beginPath();
+      this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+      
+      particle.x += particle.speed;
+      particle.y += particle.drift;
+      
+      if (particle.x > this.canvas.width + particle.size) {
+        particle.x = -particle.size;
+        particle.y = Math.random() * this.canvas.height * 0.6;
+      }
+    });
+    
+    this.cloudAnimationId = requestAnimationFrame(() => this.animateClouds());
+  }
+
+  /**
+   * Animate sun particles
+   */
+  animateSun() {
+    if (!this.ctx || this.particles.length === 0) return;
+    
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    this.particles.forEach(particle => {
+      this.ctx.save();
+      this.ctx.globalAlpha = particle.opacity;
+      this.ctx.fillStyle = '#ffeb3b';
+      this.ctx.beginPath();
+      this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+      
+      particle.angle += 0.02;
+      particle.x += Math.cos(particle.angle) * particle.speed;
+      particle.y += Math.sin(particle.angle) * particle.speed;
+      
+      if (particle.x < 0 || particle.x > this.canvas.width || 
+          particle.y < 0 || particle.y > this.canvas.height) {
+        particle.x = Math.random() * this.canvas.width;
+        particle.y = Math.random() * this.canvas.height * 0.4;
+      }
+    });
+    
+    this.sunAnimationId = requestAnimationFrame(() => this.animateSun());
+  }
+
+  /**
+   * Animate storm particles
+   */
+  animateStorm() {
+    if (!this.ctx || this.particles.length === 0) return;
+    
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Flash effect
+    if (Math.random() > 0.98) {
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.3;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      this.ctx.restore();
+    }
+    
+    this.particles.forEach(particle => {
+      this.ctx.save();
+      this.ctx.globalAlpha = particle.opacity;
+      this.ctx.strokeStyle = '#74b9ff';
+      this.ctx.lineWidth = particle.size;
+      this.ctx.beginPath();
+      this.ctx.moveTo(particle.x, particle.y);
+      this.ctx.lineTo(particle.x - 8, particle.y + 15);
+      this.ctx.stroke();
+      this.ctx.restore();
+      
+      particle.y += particle.speed;
+      particle.x -= 2;
+      
+      if (particle.y > this.canvas.height) {
+        particle.y = -15;
+        particle.x = Math.random() * this.canvas.width;
+      }
+    });
+    
+    this.stormAnimationId = requestAnimationFrame(() => this.animateStorm());
   }
 
   startRainEffect() {
@@ -869,10 +1319,148 @@ class WeatherApp {
       cancelAnimationFrame(this.snowAnimationId);
       this.snowAnimationId = null;
     }
+    if (this.cloudAnimationId) {
+      cancelAnimationFrame(this.cloudAnimationId);
+      this.cloudAnimationId = null;
+    }
+    if (this.sunAnimationId) {
+      cancelAnimationFrame(this.sunAnimationId);
+      this.sunAnimationId = null;
+    }
+    if (this.stormAnimationId) {
+      cancelAnimationFrame(this.stormAnimationId);
+      this.stormAnimationId = null;
+    }
     if (this.ctx) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     }
     this.particles = [];
+  }
+
+  /**
+   * Update temperature trend chart
+   */
+  updateTemperatureTrend() {
+    const forecast = this.state.forecast;
+    if (!forecast || !forecast.list) return;
+
+    const trendChart = document.getElementById('trendChart');
+    if (!trendChart) return;
+
+    // Get hourly temperatures for the next 24 hours
+    const hourlyTemps = forecast.list.slice(0, 24).map(item => item.main.temp);
+    const minTemp = Math.min(...hourlyTemps);
+    const maxTemp = Math.max(...hourlyTemps);
+    const tempRange = maxTemp - minTemp;
+
+    // Clear existing trend points
+    const existingPoints = trendChart.querySelectorAll('.trend-point');
+    existingPoints.forEach(point => point.remove());
+
+    // Create trend points
+    hourlyTemps.forEach((temp, index) => {
+      const point = document.createElement('div');
+      point.className = 'trend-point';
+      
+      // Calculate position (0-100% horizontally, temperature-based vertically)
+      const xPercent = (index / (hourlyTemps.length - 1)) * 100;
+      const yPercent = tempRange > 0 ? ((maxTemp - temp) / tempRange) * 80 + 10 : 50;
+      
+      point.style.left = `${xPercent}%`;
+      point.style.top = `${yPercent}%`;
+      
+      // Add tooltip with temperature
+      point.title = `${Math.round(temp)}°C`;
+      
+      trendChart.appendChild(point);
+    });
+
+    // Create animated trend line
+    this.createTrendLine(hourlyTemps, minTemp, maxTemp);
+  }
+
+  /**
+   * Create animated trend line
+   */
+  createTrendLine(temps, minTemp, maxTemp) {
+    const trendChart = document.getElementById('trendChart');
+    const trendLine = trendChart.querySelector('.trend-line');
+    
+    if (!trendLine) return;
+
+    // Create SVG path for smooth curve
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.pointerEvents = 'none';
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('stroke', 'url(#trendGradient)');
+    path.setAttribute('stroke-width', '3');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+
+    // Create gradient definition
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.setAttribute('id', 'trendGradient');
+    gradient.setAttribute('x1', '0%');
+    gradient.setAttribute('y1', '0%');
+    gradient.setAttribute('x2', '100%');
+    gradient.setAttribute('y2', '0%');
+
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', '#667eea');
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('stop-color', '#764ba2');
+
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
+    defs.appendChild(gradient);
+    svg.appendChild(defs);
+
+    // Create path data
+    const tempRange = maxTemp - minTemp;
+    let pathData = '';
+    
+    temps.forEach((temp, index) => {
+      const x = (index / (temps.length - 1)) * 100;
+      const y = tempRange > 0 ? ((maxTemp - temp) / tempRange) * 80 + 10 : 50;
+      
+      if (index === 0) {
+        pathData += `M ${x} ${y}`;
+      } else {
+        pathData += ` L ${x} ${y}`;
+      }
+    });
+
+    path.setAttribute('d', pathData);
+    path.style.strokeDasharray = '1000';
+    path.style.strokeDashoffset = '1000';
+    path.style.animation = 'drawTrendLine 2s ease-in-out forwards';
+
+    svg.appendChild(path);
+    trendChart.appendChild(svg);
+
+    // Add CSS animation for drawing the line
+    if (!document.getElementById('trendLineAnimation')) {
+      const style = document.createElement('style');
+      style.id = 'trendLineAnimation';
+      style.textContent = `
+        @keyframes drawTrendLine {
+          to {
+            stroke-dashoffset: 0;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
   }
 
   /**
@@ -959,6 +1547,271 @@ class WeatherApp {
     this.toastTimeout = setTimeout(() => {
       this.elements.toast.classList.remove('show');
     }, 3000);
+  }
+
+  /**
+   * Intelligent caching system
+   */
+  isCacheValid(key, type) {
+    const cache = this.cache[type];
+    if (!cache.has(key)) return false;
+    
+    const cached = cache.get(key);
+    const age = Date.now() - cached.timestamp;
+    return age < this.config.CACHE_DURATION;
+  }
+
+  /**
+   * Fetch with retry mechanism
+   */
+  async fetchWithRetry(url, retries = this.config.MAX_RETRIES) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.config.OFFLINE_TIMEOUT);
+        
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        return response;
+      } catch (error) {
+        this.state.retryCount++;
+        
+        if (i === retries - 1) {
+          throw error;
+        }
+        
+        // Exponential backoff
+        const delay = this.config.RETRY_DELAY * Math.pow(2, i);
+        this.logPerformance(`Retry ${i + 1}/${retries} in ${delay}ms`);
+        await this.sleep(delay);
+      }
+    }
+  }
+
+  /**
+   * Intelligent error handling
+   */
+  handleError(context, error) {
+    this.performance.errors++;
+    this.errors.lastError = {
+      context,
+      error: error.message,
+      timestamp: Date.now(),
+      retryCount: this.state.retryCount
+    };
+
+    // Categorize errors
+    if (error.name === 'AbortError') {
+      this.errors.networkErrors.push(this.errors.lastError);
+      this.showToast('Request timeout. Please check your connection.', 'warning');
+    } else if (error.message.includes('Failed to fetch')) {
+      this.errors.networkErrors.push(this.errors.lastError);
+      this.showToast('Network error. Using cached data if available.', 'warning');
+    } else {
+      this.errors.apiErrors.push(this.errors.lastError);
+      this.showToast(`API error: ${error.message}`, 'error');
+    }
+
+    // Log error for debugging
+    console.error(`[${context}] Error:`, error);
+    
+    // Auto-recovery suggestions
+    this.suggestRecovery(context, error);
+  }
+
+  /**
+   * Suggest recovery actions
+   */
+  suggestRecovery(context, error) {
+    if (!this.state.isOnline) {
+      this.showToast('You appear to be offline. Some features may be limited.', 'warning');
+      return;
+    }
+
+    if (this.state.retryCount >= this.config.MAX_RETRIES) {
+      this.showToast('Multiple failures detected. Please refresh the page.', 'error');
+      return;
+    }
+
+    if (error.message.includes('401') || error.message.includes('403')) {
+      this.showToast('API key issue. Please contact support.', 'error');
+    }
+  }
+
+  /**
+   * Performance monitoring
+   */
+  logPerformance(message) {
+    const timestamp = new Date().toISOString();
+    console.log(`[Performance ${timestamp}] ${message}`);
+    
+    // Store performance metrics
+    this.performance.loadTimes.push({
+      message,
+      timestamp: Date.now()
+    });
+    
+    // Keep only last 100 entries
+    if (this.performance.loadTimes.length > 100) {
+      this.performance.loadTimes.shift();
+    }
+  }
+
+  /**
+   * Sleep utility for delays
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Network status monitoring
+   */
+  setupNetworkMonitoring() {
+    window.addEventListener('online', () => {
+      this.state.isOnline = true;
+      this.showToast('Connection restored! Refreshing data...', 'success');
+      this.loadWeatherData(this.state.currentCity);
+    });
+
+    window.addEventListener('offline', () => {
+      this.state.isOnline = false;
+      this.showToast('Connection lost. Using cached data.', 'warning');
+    });
+  }
+
+  /**
+   * Smart notifications system
+   */
+  setupSmartNotifications() {
+    // Weather alerts
+    this.setupWeatherAlerts();
+    
+    // Performance notifications
+    this.setupPerformanceAlerts();
+    
+    // Maintenance notifications
+    this.setupMaintenanceAlerts();
+  }
+
+  /**
+   * Weather alerts based on conditions
+   */
+  setupWeatherAlerts() {
+    if (!this.state.currentWeather) return;
+
+    const weather = this.state.currentWeather;
+    const alerts = [];
+
+    // Temperature alerts
+    if (weather.main.temp > 35) {
+      alerts.push('High temperature warning! Stay hydrated.');
+    } else if (weather.main.temp < 5) {
+      alerts.push('Low temperature warning! Dress warmly.');
+    }
+
+    // Wind alerts
+    if (weather.wind.speed > 20) {
+      alerts.push('Strong winds detected. Be cautious outdoors.');
+    }
+
+    // Precipitation alerts
+    if (weather.weather[0].main.toLowerCase().includes('rain')) {
+      alerts.push('Rain expected. Consider carrying an umbrella.');
+    }
+
+    // Show alerts
+    alerts.forEach((alert, index) => {
+      setTimeout(() => {
+        this.showToast(alert, 'warning');
+      }, index * 2000);
+    });
+  }
+
+  /**
+   * Performance monitoring alerts
+   */
+  setupPerformanceAlerts() {
+    // Monitor API response times
+    const avgResponseTime = this.calculateAverageResponseTime();
+    if (avgResponseTime > 3000) {
+      this.showToast('Slow network detected. Some features may be limited.', 'warning');
+    }
+
+    // Monitor error rates
+    const errorRate = this.calculateErrorRate();
+    if (errorRate > 0.1) {
+      this.showToast('High error rate detected. Please refresh if issues persist.', 'warning');
+    }
+  }
+
+  /**
+   * Maintenance alerts
+   */
+  setupMaintenanceAlerts() {
+    // Check if app needs update
+    const lastUpdate = localStorage.getItem('lastAppUpdate');
+    const daysSinceUpdate = lastUpdate ? (Date.now() - parseInt(lastUpdate)) / (1000 * 60 * 60 * 24) : 0;
+    
+    if (daysSinceUpdate > 7) {
+      this.showToast('App update available. Please refresh for latest features.', 'info');
+    }
+  }
+
+  /**
+   * Data validation
+   */
+  validateWeatherData(data) {
+    const required = ['name', 'main', 'weather', 'wind'];
+    const missing = required.filter(field => !data[field]);
+    
+    if (missing.length > 0) {
+      throw new Error(`Invalid weather data: missing fields ${missing.join(', ')}`);
+    }
+
+    // Validate temperature range
+    if (data.main.temp < -50 || data.main.temp > 60) {
+      throw new Error('Temperature out of reasonable range');
+    }
+
+    // Validate humidity
+    if (data.main.humidity < 0 || data.main.humidity > 100) {
+      throw new Error('Humidity out of valid range');
+    }
+
+    return true;
+  }
+
+  /**
+   * Calculate average response time
+   */
+  calculateAverageResponseTime() {
+    if (this.performance.loadTimes.length === 0) return 0;
+    
+    const times = this.performance.loadTimes
+      .filter(entry => entry.message.includes('API call completed'))
+      .map(entry => {
+        const match = entry.message.match(/(\d+\.\d+)ms/);
+        return match ? parseFloat(match[1]) : 0;
+      });
+    
+    return times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+  }
+
+  /**
+   * Calculate error rate
+   */
+  calculateErrorRate() {
+    const totalCalls = this.performance.apiCalls;
+    const errors = this.performance.errors;
+    return totalCalls > 0 ? errors / totalCalls : 0;
   }
 
   /**
